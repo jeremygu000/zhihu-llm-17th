@@ -1,0 +1,35 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: >
+      sh -c 'exec redis-server
+      --appendonly yes
+      --save 60 1
+      --protected-mode no'  # 可选：如果你需要远程访问就关掉保护模式
+    volumes:
+      - redis_data:/data
+    networks:
+      - redis_net
+
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: redisinsight
+    restart: unless-stopped
+    ports:
+      - "5540:5540"
+    depends_on:
+      - redis
+    networks:
+      - redis_net
+
+volumes:
+  redis_data:
+  redisinsight_data:
+
+networks:
+  redis_net:
+    driver: bridge

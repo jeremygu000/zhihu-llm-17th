@@ -11,3 +11,6 @@ wheels/
 
 .env
 */**/.DS_Store
+
+vector_db
+faiss_index
