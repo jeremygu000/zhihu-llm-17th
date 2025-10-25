@@ -11,9 +11,11 @@ load_dotenv()
 
 FAISS_DIR = "./faiss_index/policy_kb"
 REDIS_URL = "redis://127.0.0.1:6379/0"
-DASHSCOPE_API_KEY = os.environ.get('DASHSCOPE_API_KEY') 
+DASHSCOPE_API_KEY = os.environ.get("DASHSCOPE_API_KEY")
 
-embeddings = DashScopeEmbeddings(model="text-embedding-v1", dashscope_api_key=DASHSCOPE_API_KEY)
+embeddings = DashScopeEmbeddings(
+    model="text-embedding-v1", dashscope_api_key=DASHSCOPE_API_KEY
+)
 
 vs = FaissVectorStore(path=FAISS_DIR)
 ms = RedisMetaStore(url=REDIS_URL, namespace="policy_kb")
@@ -26,7 +28,7 @@ n = kb.build_from_pdf(
     chunk_size=1000,
     chunk_overlap=200,
     persist=True,
-    text_mode="text",   # 若是扫描件可改 "ocr"
+    text_mode="text",  # 若是扫描件可改 "ocr"
 )
 print("写入 chunks:", n)
 

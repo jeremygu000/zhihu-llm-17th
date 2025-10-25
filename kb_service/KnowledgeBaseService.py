@@ -11,7 +11,9 @@ from meta_store.base import MetaStore
 
 
 class KnowledgeBaseService:
-    def __init__(self, vector_store: VectorStore, meta_store: MetaStore, embeddings: Embeddings):
+    def __init__(
+        self, vector_store: VectorStore, meta_store: MetaStore, embeddings: Embeddings
+    ):
         self.vs = vector_store
         self.ms = meta_store
         self.embeddings = embeddings
@@ -23,7 +25,17 @@ class KnowledgeBaseService:
         global_meta: Optional[Dict[str, Any]] = None,
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
-        separators: Sequence[str] = ("\n\n", "\n", "。", "！", "？", "；", "，", " ", ""),
+        separators: Sequence[str] = (
+            "\n\n",
+            "\n",
+            "。",
+            "！",
+            "？",
+            "；",
+            "，",
+            " ",
+            "",
+        ),
         persist: bool = True,
     ) -> int:
         splitter = RecursiveCharacterTextSplitter(
@@ -54,9 +66,19 @@ class KnowledgeBaseService:
         global_meta: Optional[Dict[str, Any]] = None,
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
-        separators: Sequence[str] = ("\n\n", "\n", "。", "！", "？", "；", "，", " ", ""),
+        separators: Sequence[str] = (
+            "\n\n",
+            "\n",
+            "。",
+            "！",
+            "？",
+            "；",
+            "，",
+            " ",
+            "",
+        ),
         persist: bool = True,
-        text_mode: str = "text",   # 也可用 "html"、"rawdict"、"ocr"（扫描件）
+        text_mode: str = "text",  # 也可用 "html"、"rawdict"、"ocr"（扫描件）
     ) -> int:
         """
         读取 PDF 每一页文本，按页分块并写入向量库；页码写入 Redis 元数据。
@@ -85,12 +107,14 @@ class KnowledgeBaseService:
                 doc_id = str(uuid.uuid4())
                 # 元数据写 Redis（包含页码）
                 meta = dict(global_meta or {})
-                meta.update({
-                    "doc_id": doc_id,
-                    "chunk_index": chunk_idx,
-                    "page": page_num,
-                    "source": pdf_path,
-                })
+                meta.update(
+                    {
+                        "doc_id": doc_id,
+                        "chunk_index": chunk_idx,
+                        "page": page_num,
+                        "source": pdf_path,
+                    }
+                )
                 self.ms.set_meta(doc_id, meta)
                 # 向量库仅存 doc_id
                 docs.append(Document(page_content=ch, metadata={"doc_id": doc_id}))
@@ -105,7 +129,9 @@ class KnowledgeBaseService:
         return len(docs)
 
     # ---- 查询合并元数据（已存在）----
-    def similarity_search(self, query: str, k: int = 4) -> List[Tuple[Document, Dict[str, Any]]]:
+    def similarity_search(
+        self, query: str, k: int = 4
+    ) -> List[Tuple[Document, Dict[str, Any]]]:
         hits = self.vs.similarity_search(query, k=k)
         ids = [h.metadata.get("doc_id", "") for h in hits]
         meta_map = self.ms.mget_meta(ids)

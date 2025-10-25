@@ -14,6 +14,7 @@ try:
 except ImportError:
     raise ImportError("请先安装: pip install FlagEmbedding")
 
+
 class BgeRerankService:
     """
     统一的 Rerank Service，可支持：

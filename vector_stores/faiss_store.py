@@ -26,7 +26,9 @@ class FaissVectorStore(VectorStore):
         self._vs.save_local(p)
 
     # --- build / add ---
-    def build_from_documents(self, docs: List[Document], embeddings: Embeddings) -> None:
+    def build_from_documents(
+        self, docs: List[Document], embeddings: Embeddings
+    ) -> None:
         self._vs = FAISS.from_documents(docs, embeddings)
 
     def add_documents(self, docs: List[Document]) -> None:

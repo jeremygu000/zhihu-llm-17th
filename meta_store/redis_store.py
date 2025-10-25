@@ -12,6 +12,7 @@ class RedisMetaStore(MetaStore):
     meta:{doc_id}   -> Hash 字段：meta 序列化为 str
     set:index:{ns}  -> doc_id 集合（便于清理/巡检）
     """
+
     def __init__(self, url: str, namespace: str = "kb"):
         self.r = redis.from_url(url, decode_responses=True)
         self.ns = namespace

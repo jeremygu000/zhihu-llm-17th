@@ -38,7 +38,10 @@ class MilvusVectorStore(VectorStore):
         recreate_collection: bool = False,
     ):
         self.collection_name = collection_name
-        self.connection_args = connection_args or {"host": "milvus-standalone", "port": "19530"}
+        self.connection_args = connection_args or {
+            "host": "milvus-standalone",
+            "port": "19530",
+        }
         self.index_params = index_params or {
             "index_type": "IVF_FLAT",
             "metric_type": "L2",
@@ -109,7 +112,9 @@ class MilvusVectorStore(VectorStore):
             json.dump(meta, f, ensure_ascii=False, indent=2)
 
     # ---------- build / add ----------
-    def build_from_documents(self, docs: List[Document], embeddings: Embeddings) -> None:
+    def build_from_documents(
+        self, docs: List[Document], embeddings: Embeddings
+    ) -> None:
         self._embeddings = embeddings
         self._maybe_drop_collection()
         self._vs = LCMilvus.from_documents(
@@ -124,7 +129,9 @@ class MilvusVectorStore(VectorStore):
     def add_documents(self, docs: List[Document]) -> None:
         if self._vs is None:
             if self._embeddings is None:
-                raise RuntimeError("Vector store not initialized. Call build_from_documents() or load_local() first.")
+                raise RuntimeError(
+                    "Vector store not initialized. Call build_from_documents() or load_local() first."
+                )
             self._vs = LCMilvus(
                 embedding_function=self._embeddings,
                 collection_name=self.collection_name,
@@ -138,7 +145,9 @@ class MilvusVectorStore(VectorStore):
     def similarity_search(self, query: str, k: int = 4) -> List[Document]:
         if self._vs is None:
             if self._embeddings is None:
-                raise RuntimeError("Vector store not initialized. Call build_from_documents() or load_local() first.")
+                raise RuntimeError(
+                    "Vector store not initialized. Call build_from_documents() or load_local() first."
+                )
             self._vs = LCMilvus(
                 embedding_function=self._embeddings,
                 collection_name=self.collection_name,
@@ -155,7 +164,7 @@ class MilvusVectorStore(VectorStore):
         if not utility.has_collection(self.collection_name):
             return 0
         return int(Collection(self.collection_name).num_entities)
-    
+
     def exists(self) -> bool:
         """集合是否已存在（需要 pymilvus）。未知返回 False。"""
         if utility is None:
@@ -173,6 +182,6 @@ class MilvusVectorStore(VectorStore):
             embedding_function=self._embeddings,
             collection_name=self.collection_name,
             connection_args=self.connection_args,
-            index_params=self.index_params,   # 仅供查询使用
+            index_params=self.index_params,  # 仅供查询使用
             search_params=self.search_params,
         )

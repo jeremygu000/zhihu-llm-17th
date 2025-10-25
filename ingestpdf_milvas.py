@@ -20,8 +20,8 @@ MILVUS_PORT = os.getenv("MILVUS_PORT", "19530")
 
 # 默认集合名 & 目录（可按需修改）
 DEFAULT_COLLECTION = os.getenv("MILVUS_COLLECTION", "spdb_xian_rm_assessment_policy")
-DEFAULT_SAVE_DIR   = os.getenv("SAVE_DIR", "./vector_db_milvus_meta")
-DEFAULT_PDF_PATH   = os.getenv("PDF_PATH", "./policy.pdf")
+DEFAULT_SAVE_DIR = os.getenv("SAVE_DIR", "./vector_db_milvus_meta")
+DEFAULT_PDF_PATH = os.getenv("PDF_PATH", "./policy.pdf")
 
 
 def ingest_pdf(
@@ -58,8 +58,9 @@ def ingest_pdf(
         connection_args={"host": MILVUS_HOST, "port": MILVUS_PORT},
         # index_params=index_params or {"index_type": "IVF_FLAT", "metric_type": "L2", "params": {"nlist": 1024}},
         # search_params=search_params or {"metric_type": "L2", "params": {"nprobe": 16}},
-        index_params=index_params or{"index_type": "FLAT", "metric_type": "L2"},
-        search_params=search_params or {"metric_type": "L2", "params": {}},  # 无需 nprobe
+        index_params=index_params or {"index_type": "FLAT", "metric_type": "L2"},
+        search_params=search_params
+        or {"metric_type": "L2", "params": {}},  # 无需 nprobe
         recreate_collection=recreate,
     )
 

@@ -22,7 +22,7 @@ MILVUS_HOST = os.getenv("MILVUS_HOST", "localhost")
 MILVUS_PORT = os.getenv("MILVUS_PORT", "19530")
 
 COLLECTION_NAME = os.getenv("MILVUS_COLLECTION", "spdb_xian_rm_assessment_policy")
-SAVE_DIR        = os.getenv("SAVE_DIR", "./vector_db_milvus_meta")
+SAVE_DIR = os.getenv("SAVE_DIR", "./vector_db_milvus_meta")
 # 如果本地元数据不存在，需要用哪个 PDF 来“自动初始化导入”
 PDF_PATH_IF_INIT = os.getenv("PDF_PATH", "./policy.pdf")
 
@@ -70,7 +70,8 @@ def run_query(query: str, top_k: int = 3):
 
     # 2) 构建 QA 链
     llm = Tongyi(model_name="deepseek-v3", dashscope_api_key=DASHSCOPE_API_KEY)
-    prompt = ChatPromptTemplate.from_template("""
+    prompt = ChatPromptTemplate.from_template(
+        """
     你是一位中文文档问答助手。仅依据提供的文档上下文回答问题；
     若上下文没有答案，请明确说“未在文档中找到明确答案”。
 
@@ -80,7 +81,8 @@ def run_query(query: str, top_k: int = 3):
 
     问题：{question}
     请用简洁、准确、可引用原文措辞的中文作答。
-    """.strip())
+    """.strip()
+    )
     qa_chain = create_stuff_documents_chain(llm, prompt)
 
     # 3) 检索 & 调用
@@ -96,7 +98,6 @@ def run_query(query: str, top_k: int = 3):
         print(f"Top{i} | score={score:.4f}")
         print(doc.page_content[:100])
         print("-" * 50)
-
 
     answer = qa_chain.invoke({"context": docs, "question": query})
 

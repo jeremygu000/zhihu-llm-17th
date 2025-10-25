@@ -56,7 +56,7 @@ class KnowledgeBaseBuilder:
         page_numbers: List[int],
         save_path: Optional[str] = None,
         *,
-        reembed: bool = True,   # ← 新增：是否重新 embed & 写入
+        reembed: bool = True,  # ← 新增：是否重新 embed & 写入
     ) -> VectorStore:
         splitter = RecursiveCharacterTextSplitter(
             separators=self.separators,
@@ -85,7 +85,9 @@ class KnowledgeBaseBuilder:
         else:
             # 只挂载现有集合（不写入）
             # 若你之前存过 meta（save_local）与 page_info，则这里尽量载入
-            if save_path and os.path.exists(os.path.join(save_path, "milvus_meta.json")):
+            if save_path and os.path.exists(
+                os.path.join(save_path, "milvus_meta.json")
+            ):
                 self.vs.load_local(save_path, self.embeddings)
                 print("已从本地 meta 挂载 Milvus 集合。")
                 pkl = os.path.join(save_path, "page_info.pkl")
@@ -122,14 +124,16 @@ class KnowledgeBaseBuilder:
         return self.vs
 
     # 把页码映射逻辑抽成私有方法，便于复用/测试
-    def _build_page_info(self, text: str, page_numbers: List[int], chunks: List[str]) -> dict:
+    def _build_page_info(
+        self, text: str, page_numbers: List[int], chunks: List[str]
+    ) -> dict:
         lines = text.split("\n")
         page_info = {}
         for chunk in chunks:
             start_idx = text.find(chunk[:100])
             if start_idx == -1:
                 for i, line in enumerate(lines):
-                    if chunk.startswith(line[:min(50, len(line))]):
+                    if chunk.startswith(line[: min(50, len(line))]):
                         start_idx = i
                         break
                 if start_idx == -1:
@@ -149,7 +153,9 @@ class KnowledgeBaseBuilder:
         return page_info
 
     # ---------- Step 3: 从本地元数据恢复 ----------
-    def load_knowledge_base(self, load_path: str, embeddings: Optional[Embeddings] = None) -> VectorStore:
+    def load_knowledge_base(
+        self, load_path: str, embeddings: Optional[Embeddings] = None
+    ) -> VectorStore:
         embs = embeddings or self.embeddings
         self.vs.load_local(load_path, embs)
 
