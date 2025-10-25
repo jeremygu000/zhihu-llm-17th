@@ -6,7 +6,8 @@ import os
 
 from langchain.schema import Document
 from langchain.embeddings.base import Embeddings
-from langchain_community.vectorstores import Milvus as LCMilvus
+from langchain_milvus import Milvus as LCMilvus
+from pymilvus import connections, utility, Collection
 
 try:
     from pymilvus import connections, utility, Collection
@@ -36,6 +37,7 @@ class MilvusVectorStore(VectorStore):
         index_params: Optional[Dict[str, Any]] = None,
         search_params: Optional[Dict[str, Any]] = None,
         recreate_collection: bool = False,
+        embeddings: Embeddings | None = None,
     ):
         self.collection_name = collection_name
         self.connection_args = connection_args or {
@@ -54,7 +56,7 @@ class MilvusVectorStore(VectorStore):
         self.recreate_collection = recreate_collection
 
         self._vs: Optional[LCMilvus] = None
-        self._embeddings: Optional[Embeddings] = None
+        self._embeddings: Optional[Embeddings] = embeddings
 
     # ---------- internal ----------
     def _ensure_connection(self) -> None:
@@ -143,10 +145,11 @@ class MilvusVectorStore(VectorStore):
 
     # ---------- query ----------
     def similarity_search(self, query: str, k: int = 4) -> List[Document]:
+        # 如果还没建 _vs，这里建一个
         if self._vs is None:
             if self._embeddings is None:
                 raise RuntimeError(
-                    "Vector store not initialized. Call build_from_documents() or load_local() first."
+                    "Vector store not initialized. Call build_from_documents(), load_local(), or set_embeddings() first."
                 )
             self._vs = LCMilvus(
                 embedding_function=self._embeddings,
@@ -155,7 +158,33 @@ class MilvusVectorStore(VectorStore):
                 index_params=self.index_params,
                 search_params=self.search_params,
             )
-        return self._vs.similarity_search(query, k=k)
+
+        # —— 关键兜底：确保内部真的有 embedding_func 可用 ——
+        need_fix = (
+            getattr(self._vs, "embedding_func", None) is None
+            and self._embeddings is not None
+        )
+        if need_fix:
+            try:
+                self._vs.embedding_func = self._embeddings
+            except Exception:
+                if hasattr(self._vs, "embedding"):
+                    self._vs.embedding = self._embeddings
+
+        # 仍担心的话，直接手动向量化再走 by_vector（如果支持）
+        try:
+            return self._vs.similarity_search(query, k=k)
+        except AttributeError:
+            # 极端情况下，直接手动 embed + by_vector（新老实现有的叫 similarity_search_by_vector）
+            if self._embeddings is None:
+                raise
+            qvec = self._embeddings.embed_query(query)
+            if hasattr(self._vs, "similarity_search_by_vector"):
+                return self._vs.similarity_search_by_vector(qvec, k=k)
+            # 老版本的兼容
+            if hasattr(self._vs, "search_by_vector"):
+                return self._vs.search_by_vector(qvec, k=k)
+            raise  # 实在没有就抛出
 
     def count(self) -> int:
         if Collection is None:
@@ -185,3 +214,38 @@ class MilvusVectorStore(VectorStore):
             index_params=self.index_params,  # 仅供查询使用
             search_params=self.search_params,
         )
+
+    def set_embeddings(self, embeddings: Embeddings) -> None:
+        """允许在查询时再注入 embedding 函数"""
+        self._embeddings = embeddings
+        if self._vs is not None:
+            self._vs.embedding_func = embeddings
+
+    def open_existing_collection(self, load: bool = True) -> None:
+        host = self.connection_args.get("host", "localhost")
+        port = self.connection_args.get("port", "19530")
+        connections.connect("default", host=host, port=port)
+
+        if not utility.has_collection(self.collection_name):
+            raise RuntimeError(f"Milvus 集合不存在：{self.collection_name}")
+
+        self._collection = Collection(self.collection_name)
+        if load:
+            self._collection.load()
+
+        self._vs = LCMilvus(
+            # 注意：不同版本可能是 embedding_function 或 embedding
+            embedding_function=self._embeddings,
+            collection_name=self.collection_name,
+            connection_args=self.connection_args,
+            search_params={"metric_type": "L2", "params": {"nprobe": 10}},
+        )
+
+        # —— 关键兜底：无论上面有没有生效，这里强制把 embedding_func 补上 ——
+        if getattr(self._vs, "embedding_func", None) is None and self._embeddings is not None:
+            try:
+                self._vs.embedding_func = self._embeddings
+            except Exception:
+                # 个别版本用的是不同属性名，继续兜底
+                if hasattr(self._vs, "embedding"):
+                    self._vs.embedding = self._embeddings
