@@ -75,3 +75,23 @@ class BgeRerankService:
         order, scores = self.rerank(query, contents, top_k, return_scores)
         ranked_docs = [docs[i] for i in order]
         return ranked_docs, scores
+    
+    def score_pairs(self, pairs: List[Tuple[str, str]]) -> List[float]:
+        """对 (query, passage) 对逐一打分，返回与输入同长度的分数列表"""
+        if not pairs:
+            return []
+        scores = self._model.compute_score(pairs, batch_size=self.batch_size)
+        # FlagEmbedding 可能返回 numpy 类型，这里统一成 float
+        return [float(s) for s in scores]
+
+    def score(self, query: str, docs: List[str]) -> List[float]:
+        """对一组文本打分（不排序不截断），长度与 docs 相同"""
+        if not docs:
+            return []
+        pairs = [(query, d) for d in docs]
+        return self.score_pairs(pairs)
+
+    def score_docs(self, query: str, docs: List) -> List[float]:
+        """对 LangChain Document 列表打分（不排序不截断）"""
+        contents = [getattr(d, "page_content", "") or "" for d in docs]
+        return self.score(query, contents)
