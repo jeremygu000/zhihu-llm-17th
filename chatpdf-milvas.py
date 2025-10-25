@@ -8,8 +8,10 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 
 from ingestpdf_milvas import ingest_pdf
+from rerank_service import BgeRerankService
 from vector_stores.milvus_store import MilvusVectorStore
 from utils.knowledge_builder import KnowledgeBaseBuilder
+from FlagEmbedding import FlagReranker
 
 # ---------- 基础配置 ----------
 DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
@@ -86,6 +88,15 @@ def run_query(query: str, top_k: int = 3):
     print(f"检索结果数量: {len(docs)}")
     for i, d in enumerate(docs, 1):
         print(f"Top{i} 内容片段:\n{d.page_content[:200]}\n")
+
+    reranker = BgeRerankService(model_name="BAAI/bge-reranker-base", use_fp16=True)
+    ranked_docs, scores = reranker.rerank_docs(query, docs=docs, top_k=1)
+
+    for i, (doc, score) in enumerate(zip(ranked_docs, scores), 1):
+        print(f"Top{i} | score={score:.4f}")
+        print(doc.page_content[:100])
+        print("-" * 50)
+
 
     answer = qa_chain.invoke({"context": docs, "question": query})
 
