@@ -55,8 +55,9 @@ class KnowledgeBaseBuilder:
         text: str,
         page_numbers: List[int],
         save_path: Optional[str] = None,
+        *,
+        reembed: bool = True,   # ← 新增：是否重新 embed & 写入
     ) -> VectorStore:
-        # 2.1 split
         splitter = RecursiveCharacterTextSplitter(
             separators=self.separators,
             chunk_size=self.chunk_size,
@@ -64,16 +65,64 @@ class KnowledgeBaseBuilder:
             length_function=len,
         )
         chunks = splitter.split_text(text)
-        print(f"文本被分割成 {len(chunks)} 个块。") # 文本被分割成 5 个块
+        print(f"文本被分割成 {len(chunks)} 个块。")
 
-        # 2.2 构造 LangChain Documents（保留原内容到 metadata 以便回查页码）
-        docs: List[Document] = [Document(page_content=c) for c in chunks]
+        if reembed:
+            # 正常建库写入
+            docs: List[Document] = [Document(page_content=c) for c in chunks]
+            self.vs.build_from_documents(docs, self.embeddings)
+            print("已从文本块创建知识库。")
 
-        # 2.3 建库
-        self.vs.build_from_documents(docs, self.embeddings)
-        print("已从文本块创建知识库。")
+            # 计算并保存页码映射
+            self.page_info = self._build_page_info(text, page_numbers, chunks)
 
-        # 2.4 为每个 chunk 计算来源页码（与原实现一致的近似映射）
+            if save_path:
+                os.makedirs(save_path, exist_ok=True)
+                self.vs.save_local(save_path)
+                with open(os.path.join(save_path, "page_info.pkl"), "wb") as f:
+                    pickle.dump(self.page_info, f)
+                print(f"已保存：{save_path}（向量库元信息 + 页码信息）")
+        else:
+            # 只挂载现有集合（不写入）
+            # 若你之前存过 meta（save_local）与 page_info，则这里尽量载入
+            if save_path and os.path.exists(os.path.join(save_path, "milvus_meta.json")):
+                self.vs.load_local(save_path, self.embeddings)
+                print("已从本地 meta 挂载 Milvus 集合。")
+                pkl = os.path.join(save_path, "page_info.pkl")
+                if os.path.exists(pkl):
+                    with open(pkl, "rb") as f:
+                        self.page_info = pickle.load(f)
+                    print("页码信息已加载。")
+                else:
+                    print("提示：未找到本地页码信息 page_info.pkl。")
+            else:
+                # 既没有 meta，也要能工作：直接按集合名挂载
+                self.vs.open_existing(self.embeddings)
+                print("已直接挂载现有 Milvus 集合（未加载本地 meta/page_info）。")
+                self.page_info = {}
+
+        return self.vs
+
+    def attach_existing_collection(self, meta_dir: Optional[str] = None) -> VectorStore:
+        """
+        仅挂载已有集合用于检索；如提供 meta_dir 则加载 page_info。
+        """
+        if meta_dir and os.path.exists(os.path.join(meta_dir, "milvus_meta.json")):
+            self.vs.load_local(meta_dir, self.embeddings)
+            pkl = os.path.join(meta_dir, "page_info.pkl")
+            if os.path.exists(pkl):
+                with open(pkl, "rb") as f:
+                    self.page_info = pickle.load(f)
+                print("页码信息已加载。")
+            else:
+                self.page_info = {}
+        else:
+            self.vs.open_existing(self.embeddings)
+            self.page_info = {}
+        return self.vs
+
+    # 把页码映射逻辑抽成私有方法，便于复用/测试
+    def _build_page_info(self, text: str, page_numbers: List[int], chunks: List[str]) -> dict:
         lines = text.split("\n")
         page_info = {}
         for chunk in chunks:
@@ -97,18 +146,7 @@ class KnowledgeBaseBuilder:
                     page_info[chunk] = page_numbers[-1] if page_numbers else 1
             else:
                 page_info[chunk] = -1
-
-        self.page_info = page_info
-
-        # 2.5 可选：保存向量库元数据 & 页码表
-        if save_path:
-            os.makedirs(save_path, exist_ok=True)
-            self.vs.save_local(save_path)
-            with open(os.path.join(save_path, "page_info.pkl"), "wb") as f:
-                pickle.dump(self.page_info, f)
-            print(f"已保存：{save_path}（向量库元信息 + 页码信息）")
-
-        return self.vs
+        return page_info
 
     # ---------- Step 3: 从本地元数据恢复 ----------
     def load_knowledge_base(self, load_path: str, embeddings: Optional[Embeddings] = None) -> VectorStore:

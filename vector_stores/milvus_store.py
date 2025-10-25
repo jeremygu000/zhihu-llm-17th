@@ -155,3 +155,24 @@ class MilvusVectorStore(VectorStore):
         if not utility.has_collection(self.collection_name):
             return 0
         return int(Collection(self.collection_name).num_entities)
+    
+    def exists(self) -> bool:
+        """集合是否已存在（需要 pymilvus）。未知返回 False。"""
+        if utility is None:
+            return False
+        self._ensure_connection()
+        return bool(utility.has_collection(self.collection_name))
+
+    def open_existing(self, embeddings: Embeddings) -> None:
+        """
+        挂载已有集合：不创建、不索引、不写入，仅用于检索。
+        """
+        self._embeddings = embeddings
+        # 这里不会触发 from_documents；只创建句柄
+        self._vs = LCMilvus(
+            embedding_function=self._embeddings,
+            collection_name=self.collection_name,
+            connection_args=self.connection_args,
+            index_params=self.index_params,   # 仅供查询使用
+            search_params=self.search_params,
+        )

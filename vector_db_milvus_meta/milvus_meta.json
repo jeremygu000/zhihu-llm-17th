@@ -5,16 +5,11 @@
     "port": "19530"
   },
   "index_params": {
-    "index_type": "IVF_FLAT",
-    "metric_type": "L2",
-    "params": {
-      "nlist": 1024
-    }
+    "index_type": "FLAT",
+    "metric_type": "L2"
   },
   "search_params": {
     "metric_type": "L2",
-    "params": {
-      "nprobe": 16
-    }
+    "params": {}
   }
 }
