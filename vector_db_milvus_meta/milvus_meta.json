@@ -1,0 +1,20 @@
+{
+  "collection_name": "spdb_xian_rm_assessment_policy",
+  "connection_args": {
+    "host": "localhost",
+    "port": "19530"
+  },
+  "index_params": {
+    "index_type": "IVF_FLAT",
+    "metric_type": "L2",
+    "params": {
+      "nlist": 1024
+    }
+  },
+  "search_params": {
+    "metric_type": "L2",
+    "params": {
+      "nprobe": 16
+    }
+  }
+}

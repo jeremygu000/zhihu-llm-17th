@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 from langchain_community.embeddings import DashScopeEmbeddings  # 任选 Embeddings
-from vector_store.faiss_store import FaissVectorStore
+from vector_stores.faiss_store import FaissVectorStore
 from meta_store.redis_store import RedisMetaStore
 from kb_service.KnowledgeBaseService import KnowledgeBaseService
 import os

@@ -6,7 +6,7 @@ import fitz  # PyMuPDF
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
 from langchain.embeddings.base import Embeddings
-from vector_store.base import VectorStore
+from vector_stores.base import VectorStore
 from meta_store.base import MetaStore
 
 

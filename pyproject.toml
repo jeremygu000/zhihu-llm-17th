@@ -18,6 +18,7 @@ dependencies = [
     "matplotlib>=3.10.7",
     "openai>=2.4.0",
     "pandas>=2.3.3",
+    "pymilvus>=2.6.2",
     "pymupdf>=1.26.5",
     "pypdf2>=3.0.1",
     "redis>=6.4.0",
