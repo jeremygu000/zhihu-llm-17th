@@ -23,13 +23,17 @@ _api_key = (os.getenv("DASHSCOPE_API_KEY") or "").strip()
 if not _api_key:
     raise ValueError("请设置环境变量 DASHSCOPE_API_KEY")
 
+
 @dataclass
 class RetrievalConfig:
-    k_each: int = 6            # 每路检索抓取的 top-k
-    oversample: int = 3        # 不支持 expr 时的超采样倍数
-    final_top_k: int = 5       # Rerank 后保留
-    use_aug: bool = True       # 是否合并 Doc2Query 问句向量
-    prefer_base: float = 0.0   # （可选）对原始文档加成/惩罚(>0奖励，<0惩罚)，单位是 rerank 分数的线性偏置
+    k_each: int = 6  # 每路检索抓取的 top-k
+    oversample: int = 3  # 不支持 expr 时的超采样倍数
+    final_top_k: int = 5  # Rerank 后保留
+    use_aug: bool = True  # 是否合并 Doc2Query 问句向量
+    prefer_base: float = (
+        0.0  # （可选）对原始文档加成/惩罚(>0奖励，<0惩罚)，单位是 rerank 分数的线性偏置
+    )
+
 
 RCFG = RetrievalConfig()
 
@@ -47,20 +51,21 @@ reranker = BgeRerankService(model_name="BAAI/bge-reranker-base", use_fp16=True)
 milvus_vs = MilvusVectorStore(
     collection_name=COLLECTION_NAME,
     connection_args={"host": MILVUS_HOST, "port": MILVUS_PORT},
-    embeddings=embeddings
+    embeddings=embeddings,
 )
 # 2) 给 milvus_vs 注入
 try:
-    milvus_vs.set_embeddings(embeddings)       # 如果你在类里实现了这个方法
+    milvus_vs.set_embeddings(embeddings)  # 如果你在类里实现了这个方法
 except AttributeError:
     # 如果没有 set_embeddings，就确保在 open_existing_collection 之前：
-    milvus_vs._embeddings = embeddings         # 让 open_existing_collection 用到它
+    milvus_vs._embeddings = embeddings  # 让 open_existing_collection 用到它
 milvus_vs.open_existing_collection(load=True)
 
 kb = KnowledgeBaseBuilder(milvus_vs, embeddings=embeddings)
 kb.attach_existing_collection(meta_dir="./vector_db_milvus_meta")
 
 answer_llm = Tongyi(model_name="deepseek-v3", dashscope_api_key=_api_key)
+
 
 def _dedup_docs(docs: List[Any]) -> List[Any]:
     seen, out = set(), []
@@ -71,7 +76,10 @@ def _dedup_docs(docs: List[Any]) -> List[Any]:
             out.append(d)
     return out
 
-def _try_expr_search(vs: MilvusVectorStore, query: str, k: int, expr: Optional[str], oversample: int) -> List[Any]:
+
+def _try_expr_search(
+    vs: MilvusVectorStore, query: str, k: int, expr: Optional[str], oversample: int
+) -> List[Any]:
     """
     优先用 Milvus expr（aug_type == 'doc2query' 等）过滤；
     如果你的 MilvusVectorStore 不支持 expr 参数，就退化为：超采样抓取 -> Python 过滤。
@@ -102,6 +110,7 @@ def _try_expr_search(vs: MilvusVectorStore, query: str, k: int, expr: Optional[s
 
     return [d for d in raw if match_expr(d)][:k]
 
+
 def retrieve_augmented(
     query: str,
     vector_store: MilvusVectorStore,
@@ -117,19 +126,33 @@ def retrieve_augmented(
     """
     # base 检索（原始文档向量）
     base_docs = _try_expr_search(
-        vector_store, query, k_each, expr="aug_type != 'doc2query'", oversample=oversample
+        vector_store,
+        query,
+        k_each,
+        expr="aug_type != 'doc2query'",
+        oversample=oversample,
     )
     # aug 检索（问句向量）
     aug_docs: List[Any] = []
     if include_aug:
         aug_docs = _try_expr_search(
-            vector_store, query, k_each, expr="aug_type == 'doc2query'", oversample=oversample
+            vector_store,
+            query,
+            k_each,
+            expr="aug_type == 'doc2query'",
+            oversample=oversample,
         )
 
     merged = _dedup_docs(base_docs + aug_docs)
     return merged
 
-def rerank_and_select(query: str, docs: List[Any], top_k: int = RCFG.final_top_k, prefer_base: float = RCFG.prefer_base) -> List[Any]:
+
+def rerank_and_select(
+    query: str,
+    docs: List[Any],
+    top_k: int = RCFG.final_top_k,
+    prefer_base: float = RCFG.prefer_base,
+) -> List[Any]:
     if not docs:
         return []
     pairs = [(query, getattr(d, "page_content", "") or "") for d in docs]
@@ -145,8 +168,12 @@ def rerank_and_select(query: str, docs: List[Any], top_k: int = RCFG.final_top_k
     ranked = sorted(zip(docs, scores), key=lambda x: x[1], reverse=True)
     return [d for d, s in ranked[:top_k]]
 
-def answer_with_sources(query: str, top_docs: List[Any], kb: KnowledgeBaseBuilder) -> Dict[str, Any]:
-    prompt = ChatPromptTemplate.from_template("""
+
+def answer_with_sources(
+    query: str, top_docs: List[Any], kb: KnowledgeBaseBuilder
+) -> Dict[str, Any]:
+    prompt = ChatPromptTemplate.from_template(
+        """
 你是一位中文检索问答助手。仅依据给定文档回答；若找不到明确答案，请说“未在文档中找到明确答案”。
 
 <context>
@@ -155,7 +182,8 @@ def answer_with_sources(query: str, top_docs: List[Any], kb: KnowledgeBaseBuilde
 
 问题：{question}
 请以简洁、准确、可引用原文措辞的中文作答。
-""".strip())
+""".strip()
+    )
     chain = create_stuff_documents_chain(answer_llm, prompt)
     answer = chain.invoke({"context": top_docs, "question": query})
 
@@ -170,12 +198,11 @@ def answer_with_sources(query: str, top_docs: List[Any], kb: KnowledgeBaseBuilde
             sources.append({"page": page, "snippet": text_key[:90] + "..."})
     return {"answer": answer, "sources": sources}
 
+
 # ================== Demo：检索 + 回答 ==================
 if __name__ == "__main__":
     # —— 如果你把这段加到 offline_doc2query_ingest.py 里，milvus_vs / embeddings / kb 已经在上文初始化过了 ——
     user_q = "客户经理被投诉一次扣多少分？"
-
-
 
     # 1) 召回（合并 base + doc2query）
     candidates = retrieve_augmented(
@@ -183,7 +210,7 @@ if __name__ == "__main__":
         vector_store=milvus_vs,
         k_each=6,
         oversample=3,
-        include_aug=True,   # 设为 False 则仅用原始文档
+        include_aug=True,  # 设为 False 则仅用原始文档
     )
     print(f"[召回候选] {len(candidates)} 条")
 

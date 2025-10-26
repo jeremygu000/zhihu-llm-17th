@@ -91,23 +91,26 @@ STRATEGY_PROMPT = """你是搜索策略专家。请制定检索策略：
 ### 搜索策略（仅 JSON） ###
 """
 
+
 # ---- 配置 ----
 @dataclass
 class LLMConfig:
     model: str = "qwen-turbo-latest"
     temperature: float = 0.0
     top_p: float = 0.9
-    max_tokens: Optional[int] = None   # 让 SDK 使用默认也可以
-    seed: Optional[int] = 42           # 可复现
+    max_tokens: Optional[int] = None  # 让 SDK 使用默认也可以
+    seed: Optional[int] = 42  # 可复现
     timeout: int = 30
     retries: int = 2
     backoff_base: float = 0.7
-    max_context_chars: int = 3500      # 上下文截断，控成本
+    max_context_chars: int = 3500  # 上下文截断，控成本
+
 
 # ---- 工具函数 ----
 def _truncate(s: str, limit: int) -> str:
     s = s or ""
     return s if len(s) <= limit else (s[:limit] + " …[truncated]")
+
 
 def _json_loose_parse(s: str) -> Any:
     """宽松 JSON 解析：先严格，再截片段，最后兜底原文"""
@@ -118,12 +121,13 @@ def _json_loose_parse(s: str) -> Any:
         start = min([i for i in [s.find("["), s.find("{")] if i != -1] or [-1])
         end = max(s.rfind("]"), s.rfind("}"))
         if start != -1 and end > start:
-            snippet = s[start:end+1]
+            snippet = s[start : end + 1]
             try:
                 return json.loads(snippet)
             except Exception:
                 pass
         return s
+
 
 def _call_llm(prompt: str, cfg: LLMConfig) -> str:
     messages = [{"role": "user", "content": prompt}]
@@ -148,8 +152,9 @@ def _call_llm(prompt: str, cfg: LLMConfig) -> str:
             last_err = e
             if attempt >= cfg.retries:
                 break
-            time.sleep(cfg.backoff_base * (2 ** attempt))
+            time.sleep(cfg.backoff_base * (2**attempt))
     raise RuntimeError(f"LLM 调用失败（已重试）：{last_err}")
+
 
 def _norm_keywords(items: List[str]) -> List[str]:
     """关键词标准化：去空/小写/去重/长度上限"""
@@ -163,13 +168,18 @@ def _norm_keywords(items: List[str]) -> List[str]:
             out.append(t)
     return out
 
+
 # ---- 主类 ----
 class WebSearchQueryRewriter:
-    def __init__(self, model: str = "qwen-turbo-latest", cfg: Optional[LLMConfig] = None):
+    def __init__(
+        self, model: str = "qwen-turbo-latest", cfg: Optional[LLMConfig] = None
+    ):
         self.cfg = cfg or LLMConfig(model=model)
 
     # 识别是否需要联网
-    def identify_web_search_needs(self, query: str, conversation_history: str = "") -> Dict[str, Any]:
+    def identify_web_search_needs(
+        self, query: str, conversation_history: str = ""
+    ) -> Dict[str, Any]:
         prompt = IDENTIFY_PROMPT.format(
             conversation=_truncate(conversation_history, self.cfg.max_context_chars),
             query=query.strip(),
@@ -184,7 +194,9 @@ class WebSearchQueryRewriter:
         }
         if isinstance(data, dict):
             out["need_web_search"] = bool(data.get("need_web_search", False))
-            out["search_reason"] = str(data.get("search_reason", out["search_reason"]))[:500]
+            out["search_reason"] = str(data.get("search_reason", out["search_reason"]))[
+                :500
+            ]
             try:
                 out["confidence"] = float(data.get("confidence", 0.5))
             except Exception:
@@ -192,7 +204,9 @@ class WebSearchQueryRewriter:
         return out
 
     # 为搜索改写
-    def rewrite_for_web_search(self, query: str, search_type: str = "general") -> Dict[str, Any]:
+    def rewrite_for_web_search(
+        self, query: str, search_type: str = "general"
+    ) -> Dict[str, Any]:
         prompt = REWRITE_PROMPT.format(query=query.strip(), search_type=search_type)
         raw = _call_llm(prompt, self.cfg)
         data = _json_loose_parse(raw)
@@ -206,16 +220,26 @@ class WebSearchQueryRewriter:
             rq = str(data.get("rewritten_query") or "").strip()
             if rq:
                 out["rewritten_query"] = rq
-            out["search_keywords"] = _norm_keywords(data.get("search_keywords") or out["search_keywords"])
-            out["search_intent"] = (data.get("search_intent") or out["search_intent"]).strip()[:100]
+            out["search_keywords"] = _norm_keywords(
+                data.get("search_keywords") or out["search_keywords"]
+            )
+            out["search_intent"] = (
+                data.get("search_intent") or out["search_intent"]
+            ).strip()[:100]
             ss = data.get("suggested_sources") or out["suggested_sources"]
-            out["suggested_sources"] = [s.strip() for s in ss if isinstance(s, str) and s.strip()][:6]
+            out["suggested_sources"] = [
+                s.strip() for s in ss if isinstance(s, str) and s.strip()
+            ][:6]
         return out
 
     # 搜索策略
-    def generate_search_strategy(self, query: str, search_type: str = "general") -> Dict[str, Any]:
+    def generate_search_strategy(
+        self, query: str, search_type: str = "general"
+    ) -> Dict[str, Any]:
         today = datetime.now().strftime("%Y-%m-%d")
-        prompt = STRATEGY_PROMPT.format(today=today, query=query.strip(), search_type=search_type)
+        prompt = STRATEGY_PROMPT.format(
+            today=today, query=query.strip(), search_type=search_type
+        )
         raw = _call_llm(prompt, self.cfg)
         data = _json_loose_parse(raw)
         out = {
@@ -225,20 +249,28 @@ class WebSearchQueryRewriter:
             "time_range": "最近30天",
         }
         if isinstance(data, dict):
-            out["primary_keywords"] = _norm_keywords(data.get("primary_keywords") or out["primary_keywords"])
-            out["extended_keywords"] = _norm_keywords(data.get("extended_keywords") or out["extended_keywords"])
+            out["primary_keywords"] = _norm_keywords(
+                data.get("primary_keywords") or out["primary_keywords"]
+            )
+            out["extended_keywords"] = _norm_keywords(
+                data.get("extended_keywords") or out["extended_keywords"]
+            )
             sps = data.get("search_platforms") or out["search_platforms"]
-            out["search_platforms"] = [s.strip() for s in sps if isinstance(s, str) and s.strip()][:8]
+            out["search_platforms"] = [
+                s.strip() for s in sps if isinstance(s, str) and s.strip()
+            ][:8]
             tr = str(data.get("time_range") or "").strip()
             if tr:
                 out["time_range"] = tr[:100]
         return out
 
     # 自动流程：识别 → 改写 → 策略
-    def auto_web_search_rewrite(self, query: str, conversation_history: str = "", search_type: str = "general") -> Dict[str, Any]:
+    def auto_web_search_rewrite(
+        self, query: str, conversation_history: str = "", search_type: str = "general"
+    ) -> Dict[str, Any]:
         analysis = self.identify_web_search_needs(query, conversation_history)
-        print('identify_web_search_needs', analysis)
-        
+        print("identify_web_search_needs", analysis)
+
         need_search = analysis.get("need_web_search", False)
         if not need_search:
             return {
@@ -247,12 +279,12 @@ class WebSearchQueryRewriter:
                 "original_query": query,
                 "confidence": analysis.get("confidence", 0.5),
             }
-        
+
         rewritten = self.rewrite_for_web_search(query, search_type=search_type)
-        print('rewrite_for_web_search', rewritten)
+        print("rewrite_for_web_search", rewritten)
 
         strategy = self.generate_search_strategy(query, search_type=search_type)
-        print('generate_search_strategy', strategy)
+        print("generate_search_strategy", strategy)
 
         return {
             "need_web_search": True,
@@ -265,7 +297,7 @@ class WebSearchQueryRewriter:
             "suggested_sources": rewritten["suggested_sources"],
             "search_strategy": strategy,
         }
-    
+
     def to_tavily_params(self, result: dict) -> dict:
         """
         将 auto_web_search_rewrite() 的输出映射为 Tavily MCP 参数
@@ -283,27 +315,43 @@ class WebSearchQueryRewriter:
         # 2) time_range（从策略里兜底映射，默认 week）
         tr = (strategy.get("time_range") or "week").lower()
         alias = {
-            "今天": "day", "当日": "day",
-            "本周": "week", "最近一周": "week",
-            "本月": "month", "最近一个月": "month",
-            "今年": "year", "最近一年": "year",
-            "全部": "all", "不限": "all"
+            "今天": "day",
+            "当日": "day",
+            "本周": "week",
+            "最近一周": "week",
+            "本月": "month",
+            "最近一个月": "month",
+            "今年": "year",
+            "最近一年": "year",
+            "全部": "all",
+            "不限": "all",
         }
         for k, v in alias.items():
             if k in tr:
                 tr = v
                 break
-        time_range = tr if tr in {"day","week","month","year","all"} else "week"
+        time_range = tr if tr in {"day", "week", "month", "year", "all"} else "week"
 
         # 3) topic
-        topic = "news" if any(k in intent for k in ["新闻", "舆情", "报道", "动态", "最新"]) else "general"
+        topic = (
+            "news"
+            if any(k in intent for k in ["新闻", "舆情", "报道", "动态", "最新"])
+            else "general"
+        )
 
         # 4) domains（把建议来源粗略映射成域名；可按业务补全）
         dom_map = {
-            "路透": "reuters.com", "彭博": "bloomberg.com", "华尔街日报": "wsj.com",
-            "百度百科": "baike.baidu.com", "携程": "ctrip.com", "微博": "weibo.com",
-            "知乎": "zhihu.com", "人民网": "people.com.cn", "央视": "cctv.com",
-            "上交所": "sse.com.cn", "深交所": "szse.cn",
+            "路透": "reuters.com",
+            "彭博": "bloomberg.com",
+            "华尔街日报": "wsj.com",
+            "百度百科": "baike.baidu.com",
+            "携程": "ctrip.com",
+            "微博": "weibo.com",
+            "知乎": "zhihu.com",
+            "人民网": "people.com.cn",
+            "央视": "cctv.com",
+            "上交所": "sse.com.cn",
+            "深交所": "szse.cn",
         }
         domains = []
         for src in result.get("suggested_sources", []):
@@ -320,23 +368,26 @@ class WebSearchQueryRewriter:
 
         params = {
             "query": query,
-            "search_depth": search_depth,     # "basic" | "advanced"
-            "time_range": time_range,         # "day" | "week" | "month" | "year" | "all"
+            "search_depth": search_depth,  # "basic" | "advanced"
+            "time_range": time_range,  # "day" | "week" | "month" | "year" | "all"
             "max_results": 5,
-            "include_images": any(k in intent for k in ["景点", "活动", "门票", "演出", "展览"]),
+            "include_images": any(
+                k in intent for k in ["景点", "活动", "门票", "演出", "展览"]
+            ),
             "include_answer": False,
             "include_raw_html": False,
-            "topic": topic,                   # "general" | "news"
-            "domains": domains or None,       # None 表示不限制域名
+            "topic": topic,  # "general" | "news"
+            "domains": domains or None,  # None 表示不限制域名
             "exclude_domains": [],
         }
         return params
-    
+
+
 def call_tavily_rest(params: dict):
     api_key = os.getenv("TAVILY_API_KEY")  # 你的 Tavily Key
     if not api_key:
         raise ValueError("请设置环境变量 TAVILY_API_KEY")
-    url = "https://api.tavily.com/search"   # 示例；以官方文档为准
+    url = "https://api.tavily.com/search"  # 示例；以官方文档为准
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
     r = requests.post(url, headers=headers, data=json.dumps(params), timeout=30)
     r.raise_for_status()
@@ -356,6 +407,7 @@ if __name__ == "__main__":
         tavily_params = ws.to_tavily_params(result)
         print("=== Tavily MCP 参数（粘贴到 Inspector 里即可运行）===")
         import json
+
         print(json.dumps(tavily_params, ensure_ascii=False, indent=2))
 
         resp = call_tavily_rest(tavily_params)

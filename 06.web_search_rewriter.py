@@ -91,23 +91,26 @@ STRATEGY_PROMPT = """你是搜索策略专家。请制定检索策略：
 ### 搜索策略（仅 JSON） ###
 """
 
+
 # ---- 配置 ----
 @dataclass
 class LLMConfig:
     model: str = "qwen-turbo-latest"
     temperature: float = 0.0
     top_p: float = 0.9
-    max_tokens: Optional[int] = None   # 让 SDK 使用默认也可以
-    seed: Optional[int] = 42           # 可复现
+    max_tokens: Optional[int] = None  # 让 SDK 使用默认也可以
+    seed: Optional[int] = 42  # 可复现
     timeout: int = 30
     retries: int = 2
     backoff_base: float = 0.7
-    max_context_chars: int = 3500      # 上下文截断，控成本
+    max_context_chars: int = 3500  # 上下文截断，控成本
+
 
 # ---- 工具函数 ----
 def _truncate(s: str, limit: int) -> str:
     s = s or ""
     return s if len(s) <= limit else (s[:limit] + " …[truncated]")
+
 
 def _json_loose_parse(s: str) -> Any:
     """宽松 JSON 解析：先严格，再截片段，最后兜底原文"""
@@ -118,12 +121,13 @@ def _json_loose_parse(s: str) -> Any:
         start = min([i for i in [s.find("["), s.find("{")] if i != -1] or [-1])
         end = max(s.rfind("]"), s.rfind("}"))
         if start != -1 and end > start:
-            snippet = s[start:end+1]
+            snippet = s[start : end + 1]
             try:
                 return json.loads(snippet)
             except Exception:
                 pass
         return s
+
 
 def _call_llm(prompt: str, cfg: LLMConfig) -> str:
     messages = [{"role": "user", "content": prompt}]
@@ -148,8 +152,9 @@ def _call_llm(prompt: str, cfg: LLMConfig) -> str:
             last_err = e
             if attempt >= cfg.retries:
                 break
-            time.sleep(cfg.backoff_base * (2 ** attempt))
+            time.sleep(cfg.backoff_base * (2**attempt))
     raise RuntimeError(f"LLM 调用失败（已重试）：{last_err}")
+
 
 def _norm_keywords(items: List[str]) -> List[str]:
     """关键词标准化：去空/小写/去重/长度上限"""
@@ -163,13 +168,18 @@ def _norm_keywords(items: List[str]) -> List[str]:
             out.append(t)
     return out
 
+
 # ---- 主类 ----
 class WebSearchQueryRewriter:
-    def __init__(self, model: str = "qwen-turbo-latest", cfg: Optional[LLMConfig] = None):
+    def __init__(
+        self, model: str = "qwen-turbo-latest", cfg: Optional[LLMConfig] = None
+    ):
         self.cfg = cfg or LLMConfig(model=model)
 
     # 识别是否需要联网
-    def identify_web_search_needs(self, query: str, conversation_history: str = "") -> Dict[str, Any]:
+    def identify_web_search_needs(
+        self, query: str, conversation_history: str = ""
+    ) -> Dict[str, Any]:
         prompt = IDENTIFY_PROMPT.format(
             conversation=_truncate(conversation_history, self.cfg.max_context_chars),
             query=query.strip(),
@@ -184,7 +194,9 @@ class WebSearchQueryRewriter:
         }
         if isinstance(data, dict):
             out["need_web_search"] = bool(data.get("need_web_search", False))
-            out["search_reason"] = str(data.get("search_reason", out["search_reason"]))[:500]
+            out["search_reason"] = str(data.get("search_reason", out["search_reason"]))[
+                :500
+            ]
             try:
                 out["confidence"] = float(data.get("confidence", 0.5))
             except Exception:
@@ -192,7 +204,9 @@ class WebSearchQueryRewriter:
         return out
 
     # 为搜索改写
-    def rewrite_for_web_search(self, query: str, search_type: str = "general") -> Dict[str, Any]:
+    def rewrite_for_web_search(
+        self, query: str, search_type: str = "general"
+    ) -> Dict[str, Any]:
         prompt = REWRITE_PROMPT.format(query=query.strip(), search_type=search_type)
         raw = _call_llm(prompt, self.cfg)
         data = _json_loose_parse(raw)
@@ -206,16 +220,26 @@ class WebSearchQueryRewriter:
             rq = str(data.get("rewritten_query") or "").strip()
             if rq:
                 out["rewritten_query"] = rq
-            out["search_keywords"] = _norm_keywords(data.get("search_keywords") or out["search_keywords"])
-            out["search_intent"] = (data.get("search_intent") or out["search_intent"]).strip()[:100]
+            out["search_keywords"] = _norm_keywords(
+                data.get("search_keywords") or out["search_keywords"]
+            )
+            out["search_intent"] = (
+                data.get("search_intent") or out["search_intent"]
+            ).strip()[:100]
             ss = data.get("suggested_sources") or out["suggested_sources"]
-            out["suggested_sources"] = [s.strip() for s in ss if isinstance(s, str) and s.strip()][:6]
+            out["suggested_sources"] = [
+                s.strip() for s in ss if isinstance(s, str) and s.strip()
+            ][:6]
         return out
 
     # 搜索策略
-    def generate_search_strategy(self, query: str, search_type: str = "general") -> Dict[str, Any]:
+    def generate_search_strategy(
+        self, query: str, search_type: str = "general"
+    ) -> Dict[str, Any]:
         today = datetime.now().strftime("%Y-%m-%d")
-        prompt = STRATEGY_PROMPT.format(today=today, query=query.strip(), search_type=search_type)
+        prompt = STRATEGY_PROMPT.format(
+            today=today, query=query.strip(), search_type=search_type
+        )
         raw = _call_llm(prompt, self.cfg)
         data = _json_loose_parse(raw)
         out = {
@@ -225,20 +249,28 @@ class WebSearchQueryRewriter:
             "time_range": "最近30天",
         }
         if isinstance(data, dict):
-            out["primary_keywords"] = _norm_keywords(data.get("primary_keywords") or out["primary_keywords"])
-            out["extended_keywords"] = _norm_keywords(data.get("extended_keywords") or out["extended_keywords"])
+            out["primary_keywords"] = _norm_keywords(
+                data.get("primary_keywords") or out["primary_keywords"]
+            )
+            out["extended_keywords"] = _norm_keywords(
+                data.get("extended_keywords") or out["extended_keywords"]
+            )
             sps = data.get("search_platforms") or out["search_platforms"]
-            out["search_platforms"] = [s.strip() for s in sps if isinstance(s, str) and s.strip()][:8]
+            out["search_platforms"] = [
+                s.strip() for s in sps if isinstance(s, str) and s.strip()
+            ][:8]
             tr = str(data.get("time_range") or "").strip()
             if tr:
                 out["time_range"] = tr[:100]
         return out
 
     # 自动流程：识别 → 改写 → 策略
-    def auto_web_search_rewrite(self, query: str, conversation_history: str = "", search_type: str = "general") -> Dict[str, Any]:
+    def auto_web_search_rewrite(
+        self, query: str, conversation_history: str = "", search_type: str = "general"
+    ) -> Dict[str, Any]:
         analysis = self.identify_web_search_needs(query, conversation_history)
-        print('identify_web_search_needs', analysis)
-        
+        print("identify_web_search_needs", analysis)
+
         need_search = analysis.get("need_web_search", False)
         if not need_search:
             return {
@@ -247,12 +279,12 @@ class WebSearchQueryRewriter:
                 "original_query": query,
                 "confidence": analysis.get("confidence", 0.5),
             }
-        
+
         rewritten = self.rewrite_for_web_search(query, search_type=search_type)
-        print('rewrite_for_web_search', rewritten)
+        print("rewrite_for_web_search", rewritten)
 
         strategy = self.generate_search_strategy(query, search_type=search_type)
-        print('generate_search_strategy', strategy)
+        print("generate_search_strategy", strategy)
 
         return {
             "need_web_search": True,
@@ -265,6 +297,7 @@ class WebSearchQueryRewriter:
             "suggested_sources": rewritten["suggested_sources"],
             "search_strategy": strategy,
         }
+
 
 # ---- Demo ----
 if __name__ == "__main__":

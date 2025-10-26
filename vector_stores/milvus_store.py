@@ -242,7 +242,10 @@ class MilvusVectorStore(VectorStore):
         )
 
         # —— 关键兜底：无论上面有没有生效，这里强制把 embedding_func 补上 ——
-        if getattr(self._vs, "embedding_func", None) is None and self._embeddings is not None:
+        if (
+            getattr(self._vs, "embedding_func", None) is None
+            and self._embeddings is not None
+        ):
             try:
                 self._vs.embedding_func = self._embeddings
             except Exception:

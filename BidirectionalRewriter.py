@@ -89,7 +89,7 @@ def _call_llm(prompt: str, cfg: LLMConfig) -> str:
             last_err = e
             if attempt >= cfg.retries:
                 break
-            time.sleep(cfg.backoff_base * (2 ** attempt))
+            time.sleep(cfg.backoff_base * (2**attempt))
     raise RuntimeError(f"dashscope call failed after retries: {last_err}")
 
 
@@ -124,6 +124,7 @@ D2Q_PROMPT = """你是一个检索增强生成（RAG）的查询生成器。
 {n}
 """
 
+
 class BidirectionalRewriter:
     """
     双向改写：
@@ -154,7 +155,9 @@ class BidirectionalRewriter:
         return [s for s in str(parsed).splitlines() if s.strip()]
 
     # --- 组合：给多个文档分别生成查询，并给 query 扩写 ---
-    def rewrite_both(self, query: str, docs: List[str], per_doc_n: int = 5) -> Dict[str, Any]:
+    def rewrite_both(
+        self, query: str, docs: List[str], per_doc_n: int = 5
+    ) -> Dict[str, Any]:
         q2d = self.query2doc(query)
         d2q_all: List[Dict[str, Any]] = []
         for i, d in enumerate(docs, 1):

@@ -33,15 +33,17 @@ DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
 if not DASHSCOPE_API_KEY:
     raise ValueError("请设置环境变量 DASHSCOPE_API_KEY")
 
+
 @dataclass
 class PipelineConfig:
     milvus_collection: str = "spdb_xian_rm_assessment_policy"
     milvus_host: str = "localhost"
     milvus_port: str = "19530"
-    meta_dir: str = "./vector_db_milvus_meta"     # 仅存放页码等元数据（非向量）
-    search_k_each: int = 4                        # 每条子查询在向量库取多少条
-    max_subqueries: int = 4                       # Doc2Query@Online 生成多少条
-    final_top_k: int = 5                          # Rerank 后保留多少条作答案上下文
+    meta_dir: str = "./vector_db_milvus_meta"  # 仅存放页码等元数据（非向量）
+    search_k_each: int = 4  # 每条子查询在向量库取多少条
+    max_subqueries: int = 4  # Doc2Query@Online 生成多少条
+    final_top_k: int = 5  # Rerank 后保留多少条作答案上下文
+
 
 CFG = PipelineConfig()
 
@@ -125,7 +127,6 @@ def retrieve_with_bidirectional(query: str) -> List[Any]:
     # BGE 输入是 (query, passage) 对；我们对所有候选 passage 打分
     scores = reranker.score_docs(query, all_docs)  # 返回与 all_docs 等长的分数列表
 
-
     # 排序并取 Top-K
     scored = list(zip(all_docs, scores))
     scored.sort(key=lambda x: x[1], reverse=True)
@@ -142,7 +143,8 @@ def answer_with_sources(query: str, top_docs: List[Any]) -> Dict[str, Any]:
     from langchain.chains.combine_documents import create_stuff_documents_chain
     from langchain_core.prompts import ChatPromptTemplate
 
-    prompt = ChatPromptTemplate.from_template("""
+    prompt = ChatPromptTemplate.from_template(
+        """
 你是一位中文检索问答助手。仅依据给定文档回答；若找不到明确答案，请说“未在文档中找到明确答案”。
 
 <context>
@@ -151,7 +153,8 @@ def answer_with_sources(query: str, top_docs: List[Any]) -> Dict[str, Any]:
 
 问题：{question}
 请以简洁、准确、可引用原文措辞的中文作答。
-""".strip())
+""".strip()
+    )
     chain = create_stuff_documents_chain(llm, prompt)
     resp = chain.invoke({"context": top_docs, "question": query})
 

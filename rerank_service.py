@@ -75,7 +75,7 @@ class BgeRerankService:
         order, scores = self.rerank(query, contents, top_k, return_scores)
         ranked_docs = [docs[i] for i in order]
         return ranked_docs, scores
-    
+
     def score_pairs(self, pairs: List[Tuple[str, str]]) -> List[float]:
         """对 (query, passage) 对逐一打分，返回与输入同长度的分数列表"""
         if not pairs:

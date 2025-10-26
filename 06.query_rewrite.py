@@ -120,11 +120,11 @@ class QueryRewriterConfig:
     temperature: float = 0.0
     top_p: float = 0.95
     max_tokens: Optional[int] = None  # None 表示按模型缺省
-    seed: Optional[int] = 42          # 可复现
-    timeout: int = 30                 # 请求超时秒
-    retries: int = 3                  # 重试次数
-    backoff_base: float = 0.6         # 退避基数
-    max_context_chars: int = 4000     # 上下文截断，保护 token/费用
+    seed: Optional[int] = 42  # 可复现
+    timeout: int = 30  # 请求超时秒
+    retries: int = 3  # 重试次数
+    backoff_base: float = 0.6  # 退避基数
+    max_context_chars: int = 4000  # 上下文截断，保护 token/费用
 
 
 def _truncate(s: str, limit: int) -> str:
@@ -157,7 +157,7 @@ def _call_llm(prompt, cfg):
             print(f"[DashScope Error] {type(e).__name__}: {e}")
             if attempt >= cfg.retries:
                 break
-            time.sleep(cfg.backoff_base * (2 ** attempt))
+            time.sleep(cfg.backoff_base * (2**attempt))
     raise RuntimeError(f"dashscope call failed after retries: {last_err}")
 
 
@@ -188,7 +188,9 @@ class QueryRewriter:
         self.cfg = config or QueryRewriterConfig()
 
     # ---- 五类改写 ----
-    def rewrite_context_dependent_query(self, current_query: str, conversation_history: str) -> str:
+    def rewrite_context_dependent_query(
+        self, current_query: str, conversation_history: str
+    ) -> str:
         prompt = CTX_DEP_PROMPT.format(
             conversation=_truncate(conversation_history, self.cfg.max_context_chars),
             query=current_query.strip(),
@@ -202,7 +204,9 @@ class QueryRewriter:
         )
         return _call_llm(prompt, self.cfg)
 
-    def rewrite_ambiguous_reference_query(self, current_query: str, conversation_history: str) -> str:
+    def rewrite_ambiguous_reference_query(
+        self, current_query: str, conversation_history: str
+    ) -> str:
         prompt = AMB_PROMPT.format(
             conversation=_truncate(conversation_history, self.cfg.max_context_chars),
             query=current_query.strip(),
@@ -218,7 +222,9 @@ class QueryRewriter:
         # 兜底：拆分行，过滤空
         return [q for q in str(parsed).splitlines() if q.strip()]
 
-    def rewrite_rhetorical_query(self, current_query: str, conversation_history: str) -> str:
+    def rewrite_rhetorical_query(
+        self, current_query: str, conversation_history: str
+    ) -> str:
         prompt = RHE_PROMPT.format(
             conversation=_truncate(conversation_history, self.cfg.max_context_chars),
             query=current_query.strip(),
@@ -226,7 +232,9 @@ class QueryRewriter:
         return _call_llm(prompt, self.cfg)
 
     # ---- 自动识别 + 改写 ----
-    def auto_rewrite_query(self, query: str, conversation_history: str = "", context_info: str = "") -> Dict[str, Any]:
+    def auto_rewrite_query(
+        self, query: str, conversation_history: str = "", context_info: str = ""
+    ) -> Dict[str, Any]:
         prompt = AUTO_PROMPT.format(
             conversation=_truncate(conversation_history, self.cfg.max_context_chars),
             context=_truncate(context_info, self.cfg.max_context_chars),
@@ -236,7 +244,11 @@ class QueryRewriter:
         parsed = _json_loose_parse(out)
         # 兜底结构
         if not isinstance(parsed, dict):
-            parsed = {"query_type": "未知类型", "rewritten_query": query, "confidence": 0.5}
+            parsed = {
+                "query_type": "未知类型",
+                "rewritten_query": query,
+                "confidence": 0.5,
+            }
         parsed.setdefault("query_type", "未知类型")
         parsed.setdefault("rewritten_query", query)
         try:
@@ -245,13 +257,17 @@ class QueryRewriter:
             parsed["confidence"] = 0.5
         return parsed
 
-    def auto_rewrite_and_execute(self, query: str, conversation_history: str = "", context_info: str = "") -> Dict[str, Any]:
+    def auto_rewrite_and_execute(
+        self, query: str, conversation_history: str = "", context_info: str = ""
+    ) -> Dict[str, Any]:
         result = self.auto_rewrite_query(query, conversation_history, context_info)
         qtype = result.get("query_type", "")
         if "上下文依赖" in qtype:
             final = self.rewrite_context_dependent_query(query, conversation_history)
         elif "对比" in qtype:
-            final = self.rewrite_comparative_query(query, context_info or conversation_history)
+            final = self.rewrite_comparative_query(
+                query, context_info or conversation_history
+            )
         elif "模糊指代" in qtype:
             final = self.rewrite_ambiguous_reference_query(query, conversation_history)
         elif "多意图" in qtype:
@@ -277,21 +293,21 @@ def main():
 
     print("=== 示例：上下文依赖型 ===")
     conv = (
-        '用户: 我想了解一下上海迪士尼乐园的最新项目。\n'
-        'AI: 上海迪士尼乐园最新推出了“疯狂动物城”主题园区……\n'
-        '用户: 这个园区有什么游乐设施？\n'
-        'AI: ……\n'
+        "用户: 我想了解一下上海迪士尼乐园的最新项目。\n"
+        "AI: 上海迪士尼乐园最新推出了“疯狂动物城”主题园区……\n"
+        "用户: 这个园区有什么游乐设施？\n"
+        "AI: ……\n"
     )
     q = "还有其他设施吗？"
     print(rewriter.rewrite_context_dependent_query(q, conv), "\n")
 
     print("=== 示例：对比型 ===")
-    conv2 = 'AI: 上海迪士尼乐园推出了疯狂动物城与蜘蛛侠主题园区'
+    conv2 = "AI: 上海迪士尼乐园推出了疯狂动物城与蜘蛛侠主题园区"
     q2 = "哪个游玩的时间比较长，比较有趣"
     print(rewriter.rewrite_comparative_query(q2, conv2), "\n")
 
     print("=== 示例：模糊指代型 ===")
-    conv3 = 'AI: 上海与香港迪士尼都有烟花表演'
+    conv3 = "AI: 上海与香港迪士尼都有烟花表演"
     q3 = "都什么时候开始？"
     print(rewriter.rewrite_ambiguous_reference_query(q3, conv3), "\n")
 
@@ -300,12 +316,18 @@ def main():
     print(rewriter.rewrite_multi_intent_query(q4), "\n")
 
     print("=== 示例：反问型 ===")
-    conv5 = 'AI: 下周六门票售罄'
+    conv5 = "AI: 下周六门票售罄"
     q5 = "这不会也要提前一个月预订吧？"
     print(rewriter.rewrite_rhetorical_query(q5, conv5), "\n")
 
     print("=== 示例：自动识别 ===")
-    tests = ["还有其他游乐项目吗？", "哪个园区更好玩？", "都适合小朋友吗？", "有什么餐厅？价格怎么样？", "这不会也要排队两小时吧？"]
+    tests = [
+        "还有其他游乐项目吗？",
+        "哪个园区更好玩？",
+        "都适合小朋友吗？",
+        "有什么餐厅？价格怎么样？",
+        "这不会也要排队两小时吧？",
+    ]
     for t in tests:
         print(t, "->", rewriter.auto_rewrite_query(t))
 
